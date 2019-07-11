@@ -5,12 +5,15 @@
 #include <linux/module.h>
 #include <linux/gpio.h>
 #include <linux/delay.h>
+
+#define DATA_PIN 23
+#define CLOCK_PIN 24
 void send_bit(int value)
 {
-	gpio_set_value(23,value);
-	gpio_set_value(24,1);
+	gpio_set_value(DATA_PIN, value);
+	gpio_set_value(CLOCK_PIN, 1);
 	ndelay(500);
-	gpio_set_value(24,0);
+	gpio_set_value(CLOCK_PIN, 0);
 	ndelay(500);
 
 }
@@ -23,10 +26,10 @@ void send_byte(int value)
 }
 void start_control(void)
 {
-	gpio_request(23,"sysfs");
-	gpio_request(24,"sysfs");
-	gpio_direction_output(23,0);
-	gpio_direction_output(24,0);
+	gpio_request(DATA_PIN, "sysfs");
+	gpio_request(CLOCK_PIN, "sysfs");
+	gpio_direction_output(DATA_PIN, 0);
+	gpio_direction_output(CLOCK_PIN, 0);
 
 	int i=0;
 	for(i=0;i<32;i++){
@@ -40,13 +43,13 @@ void end_control(void)
 	for(n=0;n<32;n++){
 		send_bit(1);
 	}
-	gpio_free(23);
-	gpio_free(24);
+	gpio_free(DATA_PIN);
+	gpio_free(CLOCK_PIN);
 	
 }
 static int __init blinkt_init(void)
 {
-	if(!gpio_is_valid(23)){
+	if(!gpio_is_valid(DATA_PIN)){
 		return -ENODEV;
 	}
 	start_control();
