@@ -69,5 +69,5 @@ static void __exit blinkt_exit(void)
 module_init(blinkt_init);
 module_exit(blinkt_exit);
 
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("chikuwait");
