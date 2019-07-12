@@ -39,7 +39,7 @@ void start_control(void)
 }
 void end_control(void)
 {
-	int n = 0;
+	int n;
 	for (n = 0; n < 32; n++) {
 		send_bit(1);
 	}
@@ -50,26 +50,25 @@ void end_control(void)
 static ssize_t chardev_write(struct file *p, const char __user *usr,
 			     size_t size, loff_t *loff)
 {
-	printk(KERN_INFO "Device write\n");
 	char value;
+	int i, n;
+
 	if (copy_from_user(&value, usr, size) != 0) {
 		return -EFAULT;
 	}
-	printk("%x\n", value);
 	if (!gpio_is_valid(DATA_PIN)) {
 		return -ENODEV;
-		int i = 0;
-		start_control();
-		for (i = 0; i < 8; i++) {
-			send_byte(0 | 0xe0);
-			send_byte(0);
-			send_byte(0);
-			send_byte(0);
-		}
-		end_control();
 	}
 	start_control();
-	int n;
+	for (i = 0; i < 8; i++) {
+		send_byte(0 | 0xe0);
+		send_byte(0);
+		send_byte(0);
+		send_byte(0);
+	}
+	end_control();
+
+	start_control();
 	for (n = 0; n < 8; n++) {
 		if (((value >> (7 - n)) & 0x01) == 1) {
 			send_byte(20 | 0xe0);
@@ -92,20 +91,21 @@ static struct file_operations chardev_fops = {
 
 static int __init blinkt_init(void)
 {
+	int err;
 	dev = MKDEV(240, 0);
 	register_chrdev_region(dev, 1, "hello");
 	cdev = cdev_alloc();
 	cdev->ops = &chardev_fops;
-	int err = cdev_add(cdev, dev, 1);
+	err = cdev_add(cdev, dev, 1);
 
 	return 0;
 }
 
 static void __exit blinkt_exit(void)
 {
+	int i;
 	cdev_del(cdev);
 	unregister_chrdev_region(dev, 1);
-	int i = 0;
 	start_control();
 	for (i = 0; i < 8; i++) {
 		send_byte(0 | 0xe0);
