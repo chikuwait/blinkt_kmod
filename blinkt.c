@@ -59,14 +59,6 @@ static ssize_t chardev_write(struct file *p, const char __user *usr,
 	if (!gpio_is_valid(DATA_PIN)) {
 		return -ENODEV;
 	}
-	start_control();
-	for (i = 0; i < 8; i++) {
-		send_byte(0 | 0xe0);
-		send_byte(0);
-		send_byte(0);
-		send_byte(0);
-	}
-	end_control();
 
 	start_control();
 	for (n = 0; n < 8; n++) {
