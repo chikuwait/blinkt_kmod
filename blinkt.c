@@ -5,11 +5,16 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/uaccess.h>
+#include <linux/mutex.h>
 
 #define DATA_PIN 23
 #define CLOCK_PIN 24
+static DEFINE_MUTEX(my_mutex);
+
 struct cdev *cdev;
 dev_t dev;
+char pinvalue = '0x00';
+
 void send_bit(int value)
 {
 	gpio_set_value(DATA_PIN, value);
@@ -50,19 +55,19 @@ void end_control(void)
 static ssize_t chardev_write(struct file *p, const char __user *usr,
 			     size_t size, loff_t *loff)
 {
-	char value;
 	int i, n;
-
-	if (copy_from_user(&value, usr, size) != 0) {
+	if(mutex_lock_interruptible(&my_mutex) != 0){
+		return -EFAULT;
+	}
+	if (copy_from_user(&pinvalue, usr, size) != 0) {
 		return -EFAULT;
 	}
 	if (!gpio_is_valid(DATA_PIN)) {
 		return -ENODEV;
 	}
-
 	start_control();
 	for (n = 0; n < 8; n++) {
-		if (((value >> (7 - n)) & 0x01) == 1) {
+		if (((pinvalue >> (7 - n)) & 0x01) == 1) {
 			send_byte(20 | 0xe0);
 			send_byte(255);
 		} else {
@@ -73,12 +78,25 @@ static ssize_t chardev_write(struct file *p, const char __user *usr,
 		send_byte(0);
 	}
 	end_control();
-
+	mutex_unlock(&my_mutex);
 	return size;
 }
+
+static ssize_t chardev_read(struct file *p, char __user *usr, size_t size,
+			    loff_t *loff)
+{
+	printk(KERN_INFO "Device read\n");
+	if (copy_to_user(usr, &pinvalue, size) != 0) {
+		return -EFAULT;
+	}
+	printk("pivalue = %0x\n", pinvalue);
+	return 1;
+}
+
 static struct file_operations chardev_fops = {
     .owner = THIS_MODULE,
     .write = chardev_write,
+    .read = chardev_read,
 };
 
 static int __init blinkt_init(void)
