@@ -10,10 +10,12 @@
 #define DATA_PIN 23
 #define CLOCK_PIN 24
 static DEFINE_MUTEX(my_mutex);
+static DEFINE_MUTEX(readmutex);
 
-struct cdev *cdev;
+struct cdev cdev[9];
 dev_t dev;
-char pinvalue = '0x00';
+
+char pinvalue = 0x00;
 
 void send_bit(int value)
 {
@@ -23,6 +25,7 @@ void send_bit(int value)
 	gpio_set_value(CLOCK_PIN, 0);
 	ndelay(500);
 }
+
 void send_byte(int value)
 {
 	int i;
@@ -30,6 +33,7 @@ void send_byte(int value)
 		send_bit((value >> (7 - i)) & 0x01);
 	}
 }
+
 void start_control(void)
 {
 	int i;
@@ -42,6 +46,7 @@ void start_control(void)
 		send_bit(0);
 	}
 }
+
 void end_control(void)
 {
 	int n;
@@ -52,19 +57,31 @@ void end_control(void)
 	gpio_free(CLOCK_PIN);
 }
 
-static ssize_t chardev_write(struct file *p, const char __user *usr,
-			     size_t size, loff_t *loff)
+static ssize_t chardev_write(struct file *p, const char __user * usr,
+			     size_t size, loff_t * loff)
 {
-	int i, n;
-	if(mutex_lock_interruptible(&my_mutex) != 0){
+	if (mutex_lock_interruptible(&my_mutex) != 0) {
 		return -EFAULT;
 	}
-	if (copy_from_user(&pinvalue, usr, size) != 0) {
+	char buf = 0x00;
+	int n, minor;
+	if (copy_from_user(&buf, usr, size) != 0) {
 		return -EFAULT;
 	}
 	if (!gpio_is_valid(DATA_PIN)) {
 		return -ENODEV;
 	}
+
+	minor = (int *)(p->private_data);
+	if (minor != 0) {
+		if (buf == 0x01) {
+			buf = pinvalue | (buf << (minor - 1));
+		} else {
+			buf = pinvalue ^ (1 << (minor - 1));
+		}
+	}
+	pinvalue = buf;
+	printk("minor = %d\n", minor);
 	start_control();
 	for (n = 0; n < 8; n++) {
 		if (((pinvalue >> (7 - n)) & 0x01) == 1) {
@@ -78,44 +95,68 @@ static ssize_t chardev_write(struct file *p, const char __user *usr,
 		send_byte(0);
 	}
 	end_control();
+
 	mutex_unlock(&my_mutex);
 	return size;
 }
 
-static ssize_t chardev_read(struct file *p, char __user *usr, size_t size,
-			    loff_t *loff)
+static ssize_t chardev_read(struct file *p, char __user * usr, size_t size,
+			    loff_t * loff)
 {
-	printk(KERN_INFO "Device read\n");
-	if (copy_to_user(usr, &pinvalue, size) != 0) {
+	if (mutex_lock_interruptible(&my_mutex) != 0) {
+		return -EFAULT;
+	}
+	char buf = 0x00;
+	int minor = (int *)(p->private_data);
+	if (minor != 0) {
+		buf = (pinvalue >> (minor - 1)) & 0x01;
+	} else {
+		buf = pinvalue;
+	}
+	if (copy_to_user(usr, &buf, size) != 0) {
 		return -EFAULT;
 	}
 	printk("pivalue = %0x\n", pinvalue);
+	mutex_unlock(&my_mutex);
 	return 1;
 }
 
+static int chardev_open(struct inode *inode, struct file *filep)
+{
+	int minor = iminor(inode);
+	filep->private_data = (void *)minor;
+	return 0;
+}
+
 static struct file_operations chardev_fops = {
-    .owner = THIS_MODULE,
-    .write = chardev_write,
-    .read = chardev_read,
+	.owner = THIS_MODULE,
+	.write = chardev_write,
+	.read = chardev_read,
+	.open = chardev_open,
 };
 
 static int __init blinkt_init(void)
 {
-	int err;
-	dev = MKDEV(240, 0);
-	register_chrdev_region(dev, 1, "hello");
-	cdev = cdev_alloc();
-	cdev->ops = &chardev_fops;
-	err = cdev_add(cdev, dev, 1);
+	int i;
 
+	for (i = 0; i < 9; i++) {
+		dev = MKDEV(240, i);
+		register_chrdev_region(dev, i, "hello");
+		cdev_init(&cdev[i], &chardev_fops);
+		cdev[i].owner = THIS_MODULE;
+		cdev_add(&cdev[i], dev, 1);
+	}
 	return 0;
 }
 
 static void __exit blinkt_exit(void)
 {
 	int i;
-	cdev_del(cdev);
-	unregister_chrdev_region(dev, 1);
+	for (i = 0; i < 9; i++) {
+		cdev_del(&cdev[i]);
+	}
+
+	unregister_chrdev_region(dev, 9);
 	start_control();
 	for (i = 0; i < 8; i++) {
 		send_byte(0 | 0xe0);
