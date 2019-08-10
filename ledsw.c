@@ -35,17 +35,5 @@ int main(int argc, char *argv[]){;
 		if(use_flock)
 			flock_(fd,LOCK_UN);
 	}
-
-/*
-	FILE *fd = fopen("hook","rb+") ;
-	char buf;	
-	if(fd == NULL){
-		fprintf(stderr,"オープンできませんでした");
-		return -1;
-	}
-	buf = fread(&buf,sizeof(char),1,fd);
-	printf("data = %x\n", buf);
-	fclose(fd);*/
-
 	return 0;
 }
