@@ -20,8 +20,8 @@ $ mkdev led1 c 240 8 #
 ```
 ## 3. Write values to the created device file
 ```
-$ echo -n $'1' > led 1 # No.1 LED light!
-$ echo -n $'\xff' > led 0 # All LEDs light!
+$ echo -n $'1' > led1 # No.1 LED light!
+$ echo -n $'\xff' > led0 # All LEDs light!
 
 ```
 # LICENSE
